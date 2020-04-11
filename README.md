@@ -2,9 +2,7 @@
 
 ### Installing
 
-A step by step series of examples that tell you how to get a development env running
-
-Say what the step will be
+Download Pre-trained model from google drive:https://drive.google.com/file/d/1DThZRsLugRoY3os81Gcl-CEjs5lJfZna/view?usp=sharing
 
 ```
 pip install -r requirements.txt

@@ -17,15 +17,13 @@ from flask import Flask, render_template, request
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
+#Load chrome drive
 CHROME_PATH = 'chromedriver.exe' 
 options = Options()  
-options.add_argument("--headless")
+options.add_argument("--headless") # This make Chrome run headless
 
 app = flask.Flask(__name__)
 yolov3 = None
-net_h, net_w = 416, 416
-obj_thresh, nms_thresh = 0.5, 0.45
-anchors = [[116,90,  156,198,  373,326],  [30,61, 62,45,  59,119], [10,13,  16,30,  33,23]]
 
 labels = []
 with open('logos.name','r+') as f:
@@ -33,6 +31,7 @@ with open('logos.name','r+') as f:
         i = i.rstrip()
         labels.append(i)
 
+#Bank dict map to real domain
 nametoL = {'ABBANK': 'abbank.vn',
            'ACB': 'acb.com.vn',
            'AGRIBANK': 'agribank.com.vn',
@@ -83,12 +82,14 @@ graph = tf.compat.v1.get_default_graph()
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
+
 def load():
     global yolov3
     global graph
     graph = tf.get_default_graph()
     yolov3 = load_model('final.h5',compile=False)
 
+#Preprocessing Image
 def load_image_pixels(filename, shape):
     image = load_img(filename)
     width, height = image.size
@@ -238,30 +239,17 @@ def get_boxes(boxes, labels, thresh):
                 v_scores.append(box.classes[i]*100)
     return v_boxes, v_labels, v_scores
 
-def prepare_image(image, target):
-    # if the image mode is not RGB, convert it
-    if image.mode != "RGB":
-        image = image.convert("RGB")
-
-    image = image.resize(target)
-    image = img_to_array(image)
-    image = image.astype('float32')
-    image /= 255.0
-    image = np.expand_dims(image, 0)
-    # return the processed image
-    return image
-
-#under maintain
-def check_form():
-    # result = requests.get(link)
-    # soup = BeautifulSoup(result.content, "html.parser")
-    # soup = BeautifulSoup(result.content, "html.parser")
-    # inputs = soup.find_all('input',{'type' : 'password'})
-    # if inputs != None:
-    #     return 1
-    # else:
-    #     return 0
-    return 1
+#under maintain (check website has password form)
+def check_form(link):
+    result = requests.get(link)
+    soup = BeautifulSoup(result.content, "html.parser")
+    inputs = soup.find_all('input',{'type' : 'password'})
+    if inputs != None:
+        return 1
+    else:
+        return 0
+    # return 1
+#Index
 @app.route("/index")
 def main():
    return render_template("index.html")
@@ -272,18 +260,22 @@ def predict():
     obj_thresh, nms_thresh = 0.5, 0.45
     anchors = [[116,90,  156,198,  373,326],  [30,61, 62,45,  59,119], [10,13,  16,30,  33,23]]
     input_w, input_h = 416, 416
-    # view
+
     data = {"success": False}
 
     if flask.request.method == "POST":
             result = request.form
             link = result['link']
+
+            #Take screenshot with selenium
             driver = webdriver.Chrome(executable_path=CHROME_PATH, options = options ) 
             driver.get(link)
             name = link.split("/")
             filename = name[2]+'.png'
             driver.save_screenshot( filename )
             driver.close()
+
+            #Load Image from server
             photo_filename = filename
             img = Image.open(photo_filename)
             image, image_w, image_h = load_image_pixels(photo_filename, (input_w, input_h))
@@ -300,15 +292,16 @@ def predict():
                     boxes += decode_netout(yolos[i][0], anchors[i], obj_thresh,  net_h, net_w)
 
                 v_boxes, v_labels, v_scores = get_boxes(boxes, labels, class_threshold)
-                # for i in v_labels:
                 
                 r =  dict((x,v_labels.count(x)) for x in set(v_labels))
                 r['website'] = link
-                r['password-form'] = check_form()
+                r['password-form'] = check_form(link)
                 data["predictions"].append(r)
 
             data["success"] = True
     return render_template("result.html",result = data)
+
+    #In case want to respone in json type uncomment this
     # return flask.jsonify(data)
 if __name__ == "__main__":
     print(("* Loading Keras model and Flask starting server..."

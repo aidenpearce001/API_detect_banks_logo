@@ -13,7 +13,13 @@ from keras.preprocessing.image import img_to_array
 from time import time
 import flask
 import io
-from flask import request
+from flask import Flask, render_template, request
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+
+CHROME_PATH = 'chromedriver.exe' 
+options = Options()  
+options.add_argument("--headless")
 
 app = flask.Flask(__name__)
 yolov3 = None
@@ -84,12 +90,13 @@ def load():
     yolov3 = load_model('final.h5',compile=False)
 
 def load_image_pixels(filename, shape):
+    image = load_img(filename)
+    width, height = image.size
     image = load_img(filename, target_size=shape)
     image = img_to_array(image)
     image = image.astype('float32')
-    # image /= 255.0
+    image /= 255.0
     image = expand_dims(image, 0)
-    # image = imagenet_utils.preprocess_input(image)
     return image, width, height
 
 class BoundBox:
@@ -255,6 +262,9 @@ def check_form():
     # else:
     #     return 0
     return 1
+@app.route("/index")
+def main():
+   return render_template("index.html")
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -266,10 +276,17 @@ def predict():
     data = {"success": False}
 
     if flask.request.method == "POST":
-        if flask.request.files.get("image"):
-            image = flask.request.files["image"].read()
-            image = Image.open(io.BytesIO(image))
-            image = prepare_image(image, target=(input_w, input_h))
+            result = request.form
+            link = result['link']
+            driver = webdriver.Chrome(executable_path=CHROME_PATH, options = options ) 
+            driver.get(link)
+            name = link.split("/")
+            filename = name[2]+'.png'
+            driver.save_screenshot( filename )
+            driver.close()
+            photo_filename = filename
+            img = Image.open(photo_filename)
+            image, image_w, image_h = load_image_pixels(photo_filename, (input_w, input_h))
 
             class_threshold = 0.6
             with graph.as_default():
@@ -284,13 +301,15 @@ def predict():
 
                 v_boxes, v_labels, v_scores = get_boxes(boxes, labels, class_threshold)
                 # for i in v_labels:
+                
                 r =  dict((x,v_labels.count(x)) for x in set(v_labels))
+                r['website'] = link
                 r['password-form'] = check_form()
                 data["predictions"].append(r)
 
             data["success"] = True
-
-    return flask.jsonify(data)
+    return render_template("result.html",result = data)
+    # return flask.jsonify(data)
 if __name__ == "__main__":
     print(("* Loading Keras model and Flask starting server..."
         "please wait until server has fully started"))

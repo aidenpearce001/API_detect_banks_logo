@@ -202,7 +202,9 @@ body {
   background-position: center center;
   font-weight: 600;
   font-family: Poppins;
-  margin: 0px; }
+  margin: 0px; 
+  font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", Helvetica, Arial, sans-serif; 
+}
 
 .main {
   position: relative; }

@@ -87,7 +87,7 @@ def load():
     global yolov3
     global graph
     graph = tf.get_default_graph()
-    yolov3 = load_model('final.h5',compile=False)
+    yolov3 = load_model('30k.h5',compile=False)
 
 #Preprocessing Image
 def load_image_pixels(filename, shape):
@@ -250,12 +250,13 @@ def check_form(link):
         return 0
     # return 1
 #Index
-@app.route("/index")
-def main():
-   return render_template("index.html")
+# @app.route("/index")
+# def main():
+#    return render_template("index.html")
 
-@app.route("/predict", methods=["POST"])
+@app.route("/index",methods = ['POST', 'GET'])
 def predict():
+    return render_template("index.html")
     net_h, net_w = 416, 416
     obj_thresh, nms_thresh = 0.5, 0.45
     anchors = [[116,90,  156,198,  373,326],  [30,61, 62,45,  59,119], [10,13,  16,30,  33,23]]
@@ -288,18 +289,33 @@ def predict():
 
                 boxes = list()
 
+                beauty_alert = []
+
                 for i in range(len(yolos)):
                     boxes += decode_netout(yolos[i][0], anchors[i], obj_thresh,  net_h, net_w)
 
                 v_boxes, v_labels, v_scores = get_boxes(boxes, labels, class_threshold)
                 
-                r =  dict((x,v_labels.count(x)) for x in set(v_labels))
-                r['website'] = link
-                r['password-form'] = check_form(link)
-                data["predictions"].append(r)
+                v_labels = list(dict.fromkeys(v_labels))
+                if len(v_labels) == 1 and link != nametoL[v_labels[0]]:
+                    icon = 'warning'
+                    # print('THAG L* nay gia mao website '+nametoL[v_labels[0]]) 
+                    beauty_alert.append('This web is not safe')
+                    beauty_alert.append('The logo belong to domain '+nametoL[v_labels[0]])
+                    beauty_alert.append(icon)
+                    return render_template("index.html",beauty_alert=beauty_alert)
+                if len(v_labels) == 0 or len(v_labels) > 1 :
+                    icon = 'success'
+                    beauty_alert.append('This web is Safe')
+                    beauty_alert.append('test')
+                    beauty_alert.append(icon)
+                    return render_template("index.html",beauty_alert=beauty_alert)
+                # r =  dict((x,v_labels.count(x)) for x in set(v_labels))
+                # r['website'] = link
+                # r['password-form'] = check_form(link)
+                # data["predictions"].append(r)
+            # data["success"] = True
 
-            data["success"] = True
-    return render_template("result.html",result = data)
 
     #In case want to respone in json type uncomment this
     # return flask.jsonify(data)

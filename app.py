@@ -319,7 +319,7 @@ def havingIP(url):
         return 0   
         weight.append(0)    
 
-def long_url(self,url):
+def long_url(url):
     if len(url) < 54:
         return 0            
         weight.append(0)
@@ -330,14 +330,14 @@ def long_url(self,url):
         # return 1
         weight.append(0.3)               
 
- def have_at_symbol(self,url):
-        if "@" in url:
-            # return 1            
-            weight.append(0.3)    
-        else:
-            weight.append(0)    
-            # return 0            
-def web_traffic(self,url):
+def have_at_symbol(url):
+    if "@" in url:
+        # return 1            
+        weight.append(0.3)    
+    else:
+        weight.append(0)    
+        # return 0            
+def web_traffic(url):
     try:
         rank = BeautifulSoup(urllib.request.urlopen("http://data.alexa.com/data?cli=10&dat=s&url=" + url).read(), "xml").find("REACH")['RANK']
     except TypeError:
@@ -362,8 +362,13 @@ def predict_json():
         link = request.args['url']
         data = {'url' : link}
         if check_connection(link) == 1:
+            check_form(link)
+            havingIP(link)
+            long_url(link)
+            have_at_symbol(link)
+            web_traffic(link)
+            
             yolo_predict(link)
-
             data["predictions"] = []
 
             if len(v_labels) == 1 and link != nametoL[v_labels[0]] and sum(weight) > 1.7:
@@ -390,6 +395,12 @@ def predict():
      if flask.request.method == "POST":
         result = request.form
         link = result['link']
+
+        check_form(link)
+        havingIP(link)
+        long_url(link)
+        have_at_symbol(link)
+        web_traffic(link)
 
         yolo_predict(link)
 

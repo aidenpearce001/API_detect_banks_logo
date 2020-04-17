@@ -2,7 +2,7 @@ import os
 import sys
 import numpy as np
 from PIL import Image
-# import requests
+import requests
 from bs4 import BeautifulSoup
 from numpy import expand_dims
 import tensorflow as tf
@@ -13,7 +13,7 @@ from keras.preprocessing.image import img_to_array
 from time import time
 import flask
 import io
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request,jsonify
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
@@ -82,6 +82,11 @@ graph = tf.compat.v1.get_default_graph()
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 sess = tf.Session(config=config)
+
+net_h, net_w = 416, 416
+obj_thresh, nms_thresh = 0.5, 0.45
+anchors = [[116,90,  156,198,  373,326],  [30,61, 62,45,  59,119], [10,13,  16,30,  33,23]]
+input_w, input_h = 416, 416
 
 def load():
     global yolov3
@@ -239,86 +244,164 @@ def get_boxes(boxes, labels, thresh):
                 v_scores.append(box.classes[i]*100)
     return v_boxes, v_labels, v_scores
 
+def yolo_predict(link):
+    global v_labels
+    driver = webdriver.Chrome(executable_path=CHROME_PATH, options = options ) 
+    driver.get(link)
+    name = link.split("/")
+    filename = name[2]+'.png'
+    driver.save_screenshot( filename )
+    driver.close()
+
+    #Load Image from server
+    photo_filename = filename
+    img = Image.open(photo_filename)
+    image, image_w, image_h = load_image_pixels(photo_filename, (input_w, input_h))
+
+    class_threshold = 0.6
+    with graph.as_default():
+        yolos = yolov3.predict(image)
+        
+        # data["predictions"] = []
+
+        boxes = list()
+
+        beauty_alert = []
+
+        for i in range(len(yolos)):
+            boxes += decode_netout(yolos[i][0], anchors[i], obj_thresh,  net_h, net_w)
+
+        v_boxes, v_labels, v_scores = get_boxes(boxes, labels, class_threshold)
+        
+        v_labels = list(dict.fromkeys(v_labels))
+        print(v_labels)
+        # if len(v_labels) == 1 and link != nametoL[v_labels[0]]:
+        #     return jsonify({'notsafe' : 'This web is not safe','content' : 'The logo belong to domain '+nametoL[v_labels[0]] })
+        # if len(v_labels) == 0 or len(v_labels) > 1 :
+        #     return jsonify({'safe' : 'This web is Safe'})
+        # r =  dict((x,v_labels.count(x)) for x in set(v_labels))
+        # r['website'] = link
+        # r['password-form'] = check_form(link)
+        # data["predictions"].append(r)
+
 #under maintain (check website has password form)
-def check_form(link):
-    result = requests.get(link)
+
+def check_connection(url):
+    try:
+        r = requests.get(url)
+        return 1
+    except:
+        return 0
+    return 1
+weight = []  
+
+def check_form(url):
+    result = requests.get(url)
     soup = BeautifulSoup(result.content, "html.parser")
     inputs = soup.find_all('input',{'type' : 'password'})
     if inputs != None:
+        weight.append(0.5)
         return 1
     else:
+        weight.append(0)
         return 0
     # return 1
-#Index
-# @app.route("/index")
-# def main():
-#    return render_template("index.html")
 
-@app.route("/index",methods = ['POST', 'GET'])
-def predict():
-    return render_template("index.html")
-    net_h, net_w = 416, 416
-    obj_thresh, nms_thresh = 0.5, 0.45
-    anchors = [[116,90,  156,198,  373,326],  [30,61, 62,45,  59,119], [10,13,  16,30,  33,23]]
-    input_w, input_h = 416, 416
+def havingIP(url):
+    match=re.search('(([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\.([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\.([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\.([01]?\\d\\d?|2[0-4]\\d|25[0-5])\\/)|'  #IPv4
+                '((0x[0-9a-fA-F]{1,2})\\.(0x[0-9a-fA-F]{1,2})\\.(0x[0-9a-fA-F]{1,2})\\.(0x[0-9a-fA-F]{1,2})\\/)'  
+                '(?:[a-fA-F0-9]{1,4}:){7}[a-fA-F0-9]{1,4}',url)     
+    if match:
+        return 1            
+        weight.append(0.5)
+    else:
+        #print 'No matching pattern found'
+        return 0   
+        weight.append(0)    
 
-    data = {"success": False}
+def long_url(self,url):
+    if len(url) < 54:
+        return 0            
+        weight.append(0)
+    elif len(url) >= 54 and len(url) <= 75:
+        weight.append(0.2)
+        # return 2            
+    else:
+        # return 1
+        weight.append(0.3)               
 
+ def have_at_symbol(self,url):
+        if "@" in url:
+            # return 1            
+            weight.append(0.3)    
+        else:
+            weight.append(0)    
+            # return 0            
+def web_traffic(self,url):
+    try:
+        rank = BeautifulSoup(urllib.request.urlopen("http://data.alexa.com/data?cli=10&dat=s&url=" + url).read(), "xml").find("REACH")['RANK']
+    except TypeError:
+        weight.append(0.5) 
+    except HTTPError:
+        weight.append(0.2) 
+    rank= int(rank)
+    if (rank<100000):
+        # return 0
+        weight.append(0) 
+    else:
+        # return 2
+        weight.append(0.2) 
+# Index
+@app.route("/index")
+def main():
+   return render_template("index.html")
+
+@app.route("/predict_json",methods = ['POST', 'GET'])
+def predict_json():
     if flask.request.method == "POST":
-            result = request.form
-            link = result['link']
+        link = request.args['url']
+        data = {'url' : link}
+        if check_connection(link) == 1:
+            yolo_predict(link)
 
-            #Take screenshot with selenium
-            driver = webdriver.Chrome(executable_path=CHROME_PATH, options = options ) 
-            driver.get(link)
-            name = link.split("/")
-            filename = name[2]+'.png'
-            driver.save_screenshot( filename )
-            driver.close()
+            data["predictions"] = []
 
-            #Load Image from server
-            photo_filename = filename
-            img = Image.open(photo_filename)
-            image, image_w, image_h = load_image_pixels(photo_filename, (input_w, input_h))
+            if len(v_labels) == 1 and link != nametoL[v_labels[0]] and sum(weight) > 1.7:
+                r = {'status' : 'Phising'}
+            elif len(v_labels) == 0 or len(v_labels) > 1 and sum(weight) < 1:
+                r = {'status' : 'Safe'}
+            elif  2 > sum(weight) > 1.2  :
+                r = {'status' : 'suspicious'}
+            # r =  dict((x,v_labels.count(x)) for x in set(v_labels))
+            # r['website'] = link
+            # r['password-form'] = check_form(link)
+            r['score'] = sum(weight)
+            data["predictions"].append(r)
+            data["success"] = True
 
-            class_threshold = 0.6
-            with graph.as_default():
-                yolos = yolov3.predict(image)
-                
-                data["predictions"] = []
+            return flask.jsonify(data)
 
-                boxes = list()
+        elif check_connection(link) == 1:
+            data = {"connect : can't connect to host"}
+            return flask.jsonify(data)
 
-                beauty_alert = []
+@app.route("/predict",methods = ['POST', 'GET'])
+def predict():
+     if flask.request.method == "POST":
+        result = request.form
+        link = result['link']
 
-                for i in range(len(yolos)):
-                    boxes += decode_netout(yolos[i][0], anchors[i], obj_thresh,  net_h, net_w)
+        yolo_predict(link)
 
-                v_boxes, v_labels, v_scores = get_boxes(boxes, labels, class_threshold)
-                
-                v_labels = list(dict.fromkeys(v_labels))
-                if len(v_labels) == 1 and link != nametoL[v_labels[0]]:
-                    icon = 'warning'
-                    # print('THAG L* nay gia mao website '+nametoL[v_labels[0]]) 
-                    beauty_alert.append('This web is not safe')
-                    beauty_alert.append('The logo belong to domain '+nametoL[v_labels[0]])
-                    beauty_alert.append(icon)
-                    return render_template("index.html",beauty_alert=beauty_alert)
-                if len(v_labels) == 0 or len(v_labels) > 1 :
-                    icon = 'success'
-                    beauty_alert.append('This web is Safe')
-                    beauty_alert.append('test')
-                    beauty_alert.append(icon)
-                    return render_template("index.html",beauty_alert=beauty_alert)
-                # r =  dict((x,v_labels.count(x)) for x in set(v_labels))
-                # r['website'] = link
-                # r['password-form'] = check_form(link)
-                # data["predictions"].append(r)
-            # data["success"] = True
+        if len(v_labels) == 1 and link != nametoL[v_labels[0]] and sum(weight) > 1.7:
+            return jsonify({'notsafe' : 'This web is not safe','content' : 'The logo belong to domain '+nametoL[v_labels[0]],'score' : sum(weight)})
+        elif len(v_labels) == 0 or len(v_labels) > 1 and sum(weight) < 1:
+            return jsonify({'safe' : 'This web is Safe','score' : sum(weight)})
+        elif  2 > sum(weight) > 1.2  :
+            return jsonify({'suspicious' : 'This web is High risk','score' : sum(weight)})
 
-
-    #In case want to respone in json type uncomment this
-    # return flask.jsonify(data)
+#In case want to respone in json type uncomment this
+# return flask.jsonify(data)
 if __name__ == "__main__":
     print(("* Loading Keras model and Flask starting server..."
         "please wait until server has fully started"))

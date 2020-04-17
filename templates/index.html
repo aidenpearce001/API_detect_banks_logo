@@ -12,6 +12,52 @@
 
     <!-- Main css -->
     <link rel="stylesheet" href="static/css/style.css">
+    <script src="static/vendor/jquery/jquery.min.js"></script>
+    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
+    <script src="static/vendor/jquery-ui/jquery-ui.min.js"></script>
+    <script src="static/js/main.js"></script>
+    <script>
+        $(document).ready(function() {
+
+            $('form').on('submit', function(event) {
+
+                $.ajax({
+                    data : {
+                        link : $('#destination').val(),
+                    },
+                    type : 'POST',
+                    url : '/predict'
+                })
+                .done(function(data) {
+                    if (data.notsafe) {
+                        swal({
+                            title: data.notsafe,
+                            text: data.content,
+                            icon: "warning",
+                            });
+                        console.log(data);
+                    }
+                    if (data.safe){
+                        swal({
+                            title: data.safe,
+                            icon: "success",
+                            });
+                            console.log(data);
+                    }
+                    if (data.suspiciouse){
+                        swal({
+                            title: data.safe,
+                            icon: "success",
+                            });
+                            console.log(data);
+                    }
+                });
+                event.preventDefault();
+
+            });
+
+        });
+    </script>
 </head>
 <body>
 
@@ -39,9 +85,6 @@
     </div>
     
     <!-- JS -->
-    <script src="https://unpkg.com/sweetalert/dist/sweetalert.min.js"></script>
-    <script src="static/vendor/jquery/jquery.min.js"></script>
-    <script src="static/vendor/jquery-ui/jquery-ui.min.js"></script>
-    <script src="static/js/main.js"></script>
+  
 </body>
 </html>

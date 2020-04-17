@@ -15,4 +15,5 @@ requests==2.23.0
 tensorflow-gpu==1.15.0
 wget==3.2
 selenium==3.141.0
+tensorflow-estimator==1.15.0
 

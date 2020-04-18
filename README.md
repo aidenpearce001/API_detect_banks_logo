@@ -42,6 +42,5 @@ reponse go like this
 ```
 ## Authors
 
-<<<<<<< HEAD
 * **Grey Matter** 
 

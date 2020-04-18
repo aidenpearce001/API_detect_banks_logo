@@ -44,6 +44,4 @@ reponse go like this
 
 <<<<<<< HEAD
 * **Grey Matter** 
-=======
-* **Grey Matter** 
->>>>>>> a2183cddac676c5ca7049133698e450c3d31b81c
+
